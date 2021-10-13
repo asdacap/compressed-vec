@@ -876,7 +876,7 @@ impl<'buf, T: VectBase> Iterator for FixedSectIterator<'buf, T> {
 }
 
 // This is partly for perf disassembly and partly for convenience
-pub fn unpack_u32_section(buf: &[u8]) -> [u32; 256] {
+pub fn unpack_u32_section(buf: &[u8]) -> [u32; FIXED_LEN] {
     let mut sink = U32_256Sink::new();
     NibblePackMedFixedSect::<u32>::try_from(buf).unwrap().decode_to_sink(&mut sink).unwrap();
     sink.values
@@ -925,13 +925,13 @@ mod tests {
     fn test_npu64med_write_error_no_room() {
         // Allocate a buffer that's not large enough - first, no room for header
         let mut buf = [0u8; 2];  // header needs 3 bytes at least
-        let data: Vec<u64> = (0..256).collect();
+        let data: Vec<u64> = (0..FIXED_LEN as u64).collect();
 
         let res = NibblePackMedFixedSect::gen_stats_and_write(&mut buf, 0, &data[..]);
         assert_eq!(res, Err(CodingError::NotEnoughSpace));
 
         // No room for all values
-        let mut buf = [0u8; 100];  // Need ~312 bytes to NibblePack compress the inputs above
+        let mut buf = [0u8; 32];  // Need ~312 bytes to NibblePack compress the inputs above
 
         let res = NibblePackMedFixedSect::gen_stats_and_write(&mut buf, 0, &data[..]);
         assert_eq!(res, Err(CodingError::NotEnoughSpace));
@@ -940,7 +940,7 @@ mod tests {
     #[test]
     fn test_fixedsectiterator_write_and_read() {
         let mut buf = [0u8; 1024];
-        let data: Vec<u64> = (0..256).collect();
+        let data: Vec<u64> = (0..FIXED_LEN as u64).collect();
         let mut off = 0;
 
         off = NullFixedSect::write(&mut buf, off).unwrap();
@@ -974,13 +974,13 @@ mod tests {
     #[test]
     fn test_fixedsect_u32_write_and_decode() {
         let mut buf = [0u8; 1024];
-        let data: Vec<u32> = (0..256).collect();
+        let data: Vec<u32> = (0..FIXED_LEN as u32).collect();
         let mut off = 0;
 
         off = NibblePackMedFixedSect::gen_stats_and_write(&mut buf, off, &data[..]).unwrap();
 
         let values = unpack_u32_section(&buf[..off]);
-        assert_eq!(values.iter().count(), 256);
+        assert_eq!(values.iter().count(), FIXED_LEN);
         assert_eq!(values.iter().map(|&x| x).collect::<Vec<u32>>(), data);
     }
 
@@ -990,7 +990,7 @@ mod tests {
         let mut buf = [0u8; 1024];
         let now_inst = SystemTime::now();
         let base_millis = now_inst.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
-        let data: Vec<u64> = (0..256).map(|x| x + base_millis).collect();
+        let data: Vec<u64> = (0..FIXED_LEN as u64).map(|x| x + base_millis).collect();
         let mut _off = 0;
 
         _off = DeltaNPMedFixedSect::gen_stats_and_write(&mut buf, _off, &data[..]).unwrap();
@@ -1000,10 +1000,10 @@ mod tests {
         assert!(section.num_bytes() < 350);   // 12 + ~1 bytes per element + overhead of 25% =~ 320
         section.decode_to_sink(&mut sink).unwrap();
         assert_eq!(sink.values[..], data[..]);
-        assert_eq!(section.delta_range(), 256);
+        assert_eq!(section.delta_range(), FIXED_LEN as u64);
 
         // u32
-        let data: Vec<u32> = (0..256).map(|x| x + 100_000).collect();
+        let data: Vec<u32> = (0..FIXED_LEN as u32).map(|x| x + 100_000).collect();
         _off = 0;
         _off = DeltaNPMedFixedSect::<u32>::gen_stats_and_write(&mut buf, _off, &data[..]).unwrap();
 
@@ -1012,13 +1012,13 @@ mod tests {
         assert!(section.num_bytes() < 350);   // 12 + ~1 bytes per element + overhead of 25% =~ 320
         section.decode_to_sink(&mut sink).unwrap();
         assert_eq!(sink.values[..], data[..]);
-        assert_eq!(section.delta_range(), 256);
+        assert_eq!(section.delta_range(), FIXED_LEN as u64);
     }
 
     #[test]
     fn test_const_write_and_decode() {
-        let mut buf = [0u8; 256];
-        let data = [400u64; 256];
+        let mut buf = [0u8; FIXED_LEN];
+        let data = [400u64; FIXED_LEN];
         let _off = ConstFixedSect::gen_stats_and_write(&mut buf, 0, &data[..]).unwrap();
 
         let mut sink = U64_256Sink::new();
@@ -1033,7 +1033,7 @@ mod tests {
         let mut buf = [0u8; 1024];
 
         // Test 1: Constant, non-null
-        let data = [23_000u64; 256];
+        let data = [23_000u64; FIXED_LEN];
         let _off = AutoEncoder::gen_stats_and_write(&mut buf, 0, &data[..]).unwrap();
         let sect = FixedSectEnum::<u64>::try_from(&buf[..]).unwrap();
         match sect {
@@ -1042,7 +1042,7 @@ mod tests {
         }
 
         // Test 2: all 0's
-        let data = [0u64; 256];
+        let data = [0u64; FIXED_LEN];
         let _off = AutoEncoder::gen_stats_and_write(&mut buf, 0, &data[..]).unwrap();
         let sect = FixedSectEnum::<u64>::try_from(&buf[..]).unwrap();
         match sect {
@@ -1051,7 +1051,7 @@ mod tests {
         }
 
         // Test 3: Normal items range between 1 and n
-        let data: Vec<u32> = (0..256).collect();
+        let data: Vec<u32> = (0..FIXED_LEN as u32).collect();
         let _off = AutoEncoder::gen_stats_and_write(&mut buf, 0, &data[..]).unwrap();
         let sect = FixedSectEnum::<u32>::try_from(&buf[..]).unwrap();
         match sect {
@@ -1060,7 +1060,7 @@ mod tests {
         }
 
         // Test 4: Elevated, should be delta (max-min << max)
-        let data: Vec<u32> = (10_000..10_256).collect();
+        let data: Vec<u32> = (10_000..(10_000 + FIXED_LEN as u32)).collect();
         let _off = AutoEncoder::gen_stats_and_write(&mut buf, 0, &data[..]).unwrap();
         let sect = FixedSectEnum::<u32>::try_from(&buf[..]).unwrap();
         match sect {
@@ -1074,7 +1074,7 @@ mod tests {
         let mut buf = [0u8; 1024];
 
         // f32
-        let data: Vec<f32> = (0..256).map(|x| x as f32 / 1.3).collect();
+        let data: Vec<f32> = (0..FIXED_LEN).map(|x| x as f32 / 1.3).collect();
         let _off = XorNPMedFixedSect::gen_stats_and_write(&mut buf, 0, &data[..]).unwrap();
 
         let mut sink = Section256Sink::<f32>::new();
@@ -1090,7 +1090,7 @@ mod tests {
         let mut sink = Section256Sink::<f32>::new();
 
         // Test 1: Constant, non-null
-        let data = [3.5f32; 256];
+        let data = [3.5f32; FIXED_LEN];
         let _off = XorNPMedFixedSect::gen_stats_and_write(&mut buf, 0, &data[..]).unwrap();
         let sect = FixedSectEnum::<f32>::try_from(&buf[..]).unwrap();
         match sect {
@@ -1101,7 +1101,7 @@ mod tests {
         assert_eq!(sink.values[..], data[..]);
 
         // Test 2: all 0's
-        let data = [0f32; 256];
+        let data = [0f32; FIXED_LEN];
         let _off = XorNPMedFixedSect::gen_stats_and_write(&mut buf, 0, &data[..]).unwrap();
         let sect = FixedSectEnum::<f32>::try_from(&buf[..]).unwrap();
         match sect {
@@ -1113,7 +1113,7 @@ mod tests {
         assert_eq!(sink.values[..], data[..]);
 
         // Test 3: Normal items range between 1 and n
-        let data: Vec<f32> = (0..256).map(|x| x as f32 / 1.6).collect();
+        let data: Vec<f32> = (0..FIXED_LEN).map(|x| x as f32 / 1.6).collect();
         let _off = XorNPMedFixedSect::gen_stats_and_write(&mut buf, 0, &data[..]).unwrap();
         let sect = FixedSectEnum::<f32>::try_from(&buf[..]).unwrap();
         match sect {

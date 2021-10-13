@@ -8,7 +8,7 @@
 use core::marker::PhantomData;
 use std::ops::{Add, BitXor};
 
-use crate::section::VectBase;
+use crate::section::{VectBase, FIXED_LEN};
 
 use num::{Zero, Unsigned, Float};
 use packed_simd_2::{u32x8, u64x8, f32x8, FromCast, FromBits, IntoBits};
@@ -194,14 +194,14 @@ impl<T: VectBase> Sink<T::SI> for VecSink<T> {
 #[repr(align(32))]  // SIMD alignment?
 pub struct Section256Sink<T>
 where T: VectBase {
-    pub values: [T; 256],
+    pub values: [T; FIXED_LEN],
     i: usize,
 }
 
 impl<T> Section256Sink<T>
 where T: VectBase {
     pub fn new() -> Self {
-        Self { values: [T::zero(); 256], i: 0 }
+        Self { values: [T::zero(); FIXED_LEN], i: 0 }
     }
 }
 

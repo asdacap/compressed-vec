@@ -298,7 +298,7 @@ where T: VectBase + Clone + PartialOrd + BaseSubtypeMapping,
     /// into the vector.
     pub fn append(&mut self, value: T) -> Result<(), CodingError> {
         self.write_buf.push(value);
-        if self.write_buf.len() >= FIXED_LEN {
+        if self.write_buf.len() >= FIXED_LEN as usize {
             self.encode_section()
         } else {
             Ok(())
@@ -315,16 +315,16 @@ where T: VectBase + Clone + PartialOrd + BaseSubtypeMapping,
                 let num_to_fill = left.min(FIXED_LEN - self.write_buf.len());
                 self.write_buf.resize(self.write_buf.len() + num_to_fill as usize, T::zero());
                 left -= num_to_fill;
-                if self.write_buf.len() >= FIXED_LEN { self.encode_section()?; }
+                if self.write_buf.len() >= FIXED_LEN as usize { self.encode_section()?; }
             // If empty, and we have at least FIXED_LEN nulls to go, insert a null section.
-            } else if left >= FIXED_LEN {
+            } else if left >= FIXED_LEN as usize {
                 self.offset = self.retry_grow(|s| NullFixedSect::write(s.vect_buf.as_mut_slice(), s.offset))?;
                 self.stats.num_null_sections += 1;
                 self.stats.update_num_elems(&mut self.vect_buf, self.stats.num_elements + FIXED_LEN as u32)?;
                 self.header.update_num_bytes(self.vect_buf.as_mut_slice(),
                                              (self.offset - NUM_HEADER_BYTES_TOTAL) as u32)?;
                 left -= FIXED_LEN;
-            // If empty, and less than fixed_len nulls, insert nulls into write_buf
+            // If empty, and less than self.max_section_size nulls, insert nulls into write_buf
             } else {
                 self.write_buf.resize(left as usize, T::zero());
                 left = 0;
@@ -354,7 +354,7 @@ where T: VectBase + Clone + PartialOrd + BaseSubtypeMapping,
         }
 
         while self.stats.num_elements < total_num_rows as u32 {
-            self.append_nulls(256)?;
+            self.append_nulls(FIXED_LEN)?
         }
 
         // Re-write the number of elements to reflect total_num_rows
